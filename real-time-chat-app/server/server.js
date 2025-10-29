@@ -50,6 +50,30 @@ io.on('connection', (socket) => {
     io.emit('receive_message', messageData);
   });
 
+  // When a user sends a private message
+  socket.on('private_message', ({ to, text }) => {
+    
+    // Find socket ID of recipient
+    const recipientSocketId = Object.keys(users).find(id => users[id] === to);
+    
+    if (recipientSocketId) {
+      // Send to the recipient
+      socket.to(recipientSocketId).emit('private_message', {
+        from: socket.username,
+        text,    
+        time: new Date().toISOString() // Using ISOString for consistency
+      });
+      
+      // Also send to sender for UI confirmation
+      socket.emit('private_message', {
+        from: socket.username,
+        to,
+        text,
+        self: true,
+        time: new Date().toISOString() // Using ISOString for consistency
+      });
+    }
+  });
    // User typing events
   socket.on('typing', ({ username }) => {
     socket.broadcast.emit('user_typing', { username });
@@ -75,3 +99,4 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
