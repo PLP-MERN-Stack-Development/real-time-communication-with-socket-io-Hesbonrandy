@@ -26,13 +26,13 @@ const Chat = ({ username, socket }) => {
     socket.on('receive_message', (msg) => {
       setMessages((prev) => [...prev, msg]);
 
-      // ✅ Play notification sound for messages from others
+      // Play notification sound for messages from others
       if (!msg.self) {
         const notificationSound = new Audio('/message.mp3');
         notificationSound.play().catch(err => console.warn("Audio play error:", err));
       }
 
-      // Browser notification for messages from others
+      // Browser notification
       if (!msg.self && Notification.permission === 'granted') {
         new Notification('New message!', { body: `${msg.username}: ${msg.text}` });
       }
@@ -41,13 +41,11 @@ const Chat = ({ username, socket }) => {
     socket.on('receive_file', (msg) => {
       setMessages((prev) => [...prev, msg]);
 
-      // ✅ Play notification sound for files from others
       if (!msg.self) {
         const notificationSound = new Audio('/message.mp3');
         notificationSound.play().catch(err => console.warn("Audio play error:", err));
       }
 
-      // Browser notification for files from others
       if (!msg.self && Notification.permission === 'granted') {
         new Notification('New file received!', { body: `${msg.username} sent: ${msg.fileName}` });
       }
@@ -85,34 +83,49 @@ const Chat = ({ username, socket }) => {
     return () => socket.off('user_status');
   }, [socket]);
 
+  // Handle connection and reconnection
   useEffect(() => {
-  socket.on('connect_error', (err) => {
-    console.error('Connection error:', err);
-    alert('Connection lost. Please check your network.');
-  });
+    socket.on('connect_error', (err) => {
+      console.error('Connection error:', err);
+      alert('Connection lost. Please check your network.');
+    });
 
-  socket.on('reconnect', () => {
-    console.log('Reconnected to server');
-    socket.emit('user_join', { username });
-  });
+    socket.on('reconnect', () => {
+      console.log('Reconnected to server');
+      socket.emit('user_join', { username });
+    });
 
-  return () => {
-    socket.off('connect_error');
-    socket.off('reconnect');
-  };
-}, [socket, username]);
+    return () => {
+      socket.off('connect_error');
+      socket.off('reconnect');
+    };
+  }, [socket, username]);
 
-  // Handle sending a text message
+  // Handle sending a text message with acknowledgment
   const sendMessage = (e) => {
     e.preventDefault();
     if (input.trim()) {
       const messageData = {
         username,
         text: input,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      socket.emit('send_message', messageData);
-      setMessages((prev) => [...prev, { ...messageData, self: true }]);
+
+      // Emit with acknowledgment callback
+      socket.emit('send_message', messageData, (ack) => {
+        if (ack?.received) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.time === messageData.time && msg.username === username
+                ? { ...msg, status: 'delivered' }
+                : msg
+            )
+          );
+        }
+      });
+
+      // Add locally with pending status
+      setMessages((prev) => [...prev, { ...messageData, self: true, status: 'sent' }]);
       setInput('');
     }
   };
@@ -126,7 +139,7 @@ const Chat = ({ username, socket }) => {
     }, 1000);
   };
 
-  // Handle file uploads
+  // Handle file uploads with acknowledgment
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -138,10 +151,23 @@ const Chat = ({ username, socket }) => {
         fileName: file.name,
         fileType: file.type,
         fileContent: reader.result,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      socket.emit('send_file', fileData);
-      setMessages((prev) => [...prev, { ...fileData, self: true }]);
+
+      // Emit with acknowledgment callback
+      socket.emit('send_file', fileData, (ack) => {
+        if (ack?.received) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.time === fileData.time && msg.username === username
+                ? { ...msg, status: 'delivered' }
+                : msg
+            )
+          );
+        }
+      });
+
+      setMessages((prev) => [...prev, { ...fileData, self: true, status: 'sent' }]);
     };
     reader.readAsDataURL(file);
   };
@@ -170,7 +196,9 @@ const Chat = ({ username, socket }) => {
                 📎 {msg.fileName}
               </a>
             )}{' '}
-            <small>{msg.time}</small>
+            <small>
+              {msg.time} {msg.self && (msg.status === 'delivered' ? '✅' : '⏳')}
+            </small>
           </div>
         ))}
         {isTyping && <div className="typing-indicator">Someone is typing...</div>}

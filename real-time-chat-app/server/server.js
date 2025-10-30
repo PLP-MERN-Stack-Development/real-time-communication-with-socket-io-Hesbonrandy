@@ -12,8 +12,8 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: "http://localhost:3000", // React dev server
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST"],
+  },
 });
 
 // Store online users
@@ -33,49 +33,66 @@ io.on('connection', (socket) => {
     users[socket.id] = username;
     socket.username = username;
     console.log(`${username} joined the chat`);
+
+    // Notify others
     socket.broadcast.emit('user_joined', { username });
 
     // Broadcast updated online users
     io.emit('user_status', { users: Object.values(users) });
   });
 
-  // When a user sends a message
-  socket.on('send_message', (data) => {
+  // When a user sends a message (with acknowledgment)
+  socket.on('send_message', (data, callback) => {
     const messageData = {
-      username: socket.username,     // Sender's username
-      message: data.message,         // Message content
-      timestamp: new Date().toISOString() // Optional timestamp
+      username: socket.username,
+      text: data.text,
+      time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // Broadcast message to all clients
+    // Broadcast message to all users (including sender)
     io.emit('receive_message', messageData);
+
+    // Acknowledge receipt back to the sender
+    if (callback) callback({ received: true });
   });
 
-  // When a user sends a private message
-  socket.on('private_message', ({ to, text }) => {
+  // When a user sends a file (with acknowledgment)
+  socket.on('send_file', (data, callback) => {
+    const fileData = {
+      username: socket.username,
+      fileName: data.fileName,
+      fileType: data.fileType,
+      fileContent: data.fileContent,
+      time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
 
-    // Find socket ID of recipient
-    const recipientSocketId = Object.keys(users).find(id => users[id] === to);
-    
-    if (recipientSocketId) {
-      // Send to the recipient
-      socket.to(recipientSocketId).emit('private_message', {
-        from: socket.username,
-        text,    
-        time: new Date().toISOString() // Using ISOString for consistency
-      });
-      
-      // Also send to sender for UI confirmation
-      socket.emit('private_message', {
-        from: socket.username,
-        to,
-        text,
-        self: true,
-        time: new Date().toISOString() // Using ISOString for consistency
-      });
-    }
-  });
-   // User typing events
+    // Broadcast the file to all clients
+    io.emit('receive_file', fileData);
+
+    // Confirm receipt to sender
+    if (callback) callback({ received: true });
+  });
+
+  // Private messages
+  socket.on('private_message', ({ to, text }) => {
+    const recipientSocketId = Object.keys(users).find((id) => users[id] === to);
+
+    if (recipientSocketId) {
+      const msg = {
+        from: socket.username,
+        text,
+        time: new Date().toISOString(),
+      };
+
+      // Send to recipient
+      socket.to(recipientSocketId).emit('private_message', msg);
+
+      // Echo back to sender
+      socket.emit('private_message', { ...msg, self: true, to });
+    }
+  });
+
+  // Typing indicators
   socket.on('typing', ({ username }) => {
     socket.broadcast.emit('user_typing', { username });
   });
@@ -84,13 +101,13 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('user_stop_typing');
   });
 
-   // Join a specific room
+  // Room joining
   socket.on('join_room', (room) => {
     socket.join(room);
     console.log(`${socket.username} joined room: ${room}`);
   });
 
-  // Send message to a specific room
+  // Room messages
   socket.on('room_message', ({ room, message }) => {
     const roomMessage = {
       username: socket.username,
@@ -100,13 +117,13 @@ io.on('connection', (socket) => {
     io.to(room).emit('room_message', roomMessage);
   });
 
-  // When a user disconnects
+  // Handle disconnect
   socket.on('disconnect', () => {
     if (users[socket.id]) {
       console.log(`${users[socket.id]} disconnected`);
       delete users[socket.id];
 
-      // Broadcast updated online users
+      // Update online users list
       io.emit('user_status', { users: Object.values(users) });
     }
   });
@@ -116,4 +133,3 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
