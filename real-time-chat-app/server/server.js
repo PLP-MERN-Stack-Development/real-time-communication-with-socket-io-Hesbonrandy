@@ -52,7 +52,7 @@ io.on('connection', (socket) => {
 
   // When a user sends a private message
   socket.on('private_message', ({ to, text }) => {
-    
+
     // Find socket ID of recipient
     const recipientSocketId = Object.keys(users).find(id => users[id] === to);
     
@@ -83,6 +83,22 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('user_stop_typing');
   });
 
+   // Join a specific room
+  socket.on('join_room', (room) => {
+    socket.join(room);
+    console.log(`${socket.username} joined room: ${room}`);
+  });
+
+  // Send message to a specific room
+  socket.on('room_message', ({ room, message }) => {
+    const roomMessage = {
+      username: socket.username,
+      message,
+      time: new Date().toISOString(),
+    };
+    io.to(room).emit('room_message', roomMessage);
+  });
+  
   // When a user disconnects
   socket.on('disconnect', () => {
     if (users[socket.id]) {

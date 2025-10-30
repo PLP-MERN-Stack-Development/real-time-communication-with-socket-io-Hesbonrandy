@@ -1,4 +1,3 @@
-// client/src/components/Chat.js
 import React, { useState, useEffect, useRef } from 'react';
 
 const Chat = ({ username, socket }) => {
@@ -13,7 +12,6 @@ const Chat = ({ username, socket }) => {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
-
   useEffect(scrollToBottom, [messages]);
 
   // Listen for incoming messages
@@ -21,7 +19,16 @@ const Chat = ({ username, socket }) => {
     socket.on('receive_message', (data) => {
       setMessages((prev) => [...prev, data]);
     });
-    return () => socket.off('receive_message');
+
+    // Listen for incoming files
+    socket.on('receive_file', (data) => {
+      setMessages((prev) => [...prev, data]);
+    });
+
+    return () => {
+      socket.off('receive_message');
+      socket.off('receive_file');
+    };
   }, [socket]);
 
   // Listen for typing events
@@ -74,6 +81,26 @@ const Chat = ({ username, socket }) => {
     }, 1000);
   };
 
+  // Handle file upload
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const fileData = {
+        username,
+        fileName: file.name,
+        fileType: file.type,
+        fileContent: reader.result, // base64 string
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      socket.emit('send_file', fileData);
+      setMessages((prev) => [...prev, { ...fileData, self: true }]);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="chat-container">
       {/* Online Users */}
@@ -90,14 +117,22 @@ const Chat = ({ username, socket }) => {
       <div className="messages">
         {messages.map((msg, i) => (
           <div key={i} className={msg.self ? 'self' : 'other'}>
-            <strong>{msg.username}:</strong> {msg.text} <small>{msg.time}</small>
+            <strong>{msg.username}:</strong>{' '}
+            {msg.text ? (
+              msg.text
+            ) : (
+              <a href={msg.fileContent} download={msg.fileName}>
+                📎 {msg.fileName}
+              </a>
+            )}{' '}
+            <small>{msg.time}</small>
           </div>
         ))}
         {isTyping && <div className="typing-indicator">Someone is typing...</div>}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input */}
+      {/* Message Input & File Upload */}
       <form onSubmit={sendMessage}>
         <input
           value={input}
@@ -107,6 +142,7 @@ const Chat = ({ username, socket }) => {
           }}
           placeholder="Type a message..."
         />
+        <input type="file" onChange={handleFileUpload} />
         <button type="submit">Send</button>
       </form>
     </div>
