@@ -33,6 +33,7 @@ io.on('connection', (socket) => {
     users[socket.id] = username;
     socket.username = username;
     console.log(`${username} joined the chat`);
+    socket.broadcast.emit('user_joined', { username });
 
     // Broadcast updated online users
     io.emit('user_status', { users: Object.values(users) });
@@ -98,7 +99,7 @@ io.on('connection', (socket) => {
     };
     io.to(room).emit('room_message', roomMessage);
   });
-  
+
   // When a user disconnects
   socket.on('disconnect', () => {
     if (users[socket.id]) {

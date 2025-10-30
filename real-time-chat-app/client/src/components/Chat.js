@@ -8,7 +8,14 @@ const Chat = ({ username, socket }) => {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Scroll to the bottom whenever messages change
+  // Request notification permission on mount
+  useEffect(() => {
+    if (Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Scroll to bottom when messages change
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -16,13 +23,34 @@ const Chat = ({ username, socket }) => {
 
   // Listen for incoming messages
   useEffect(() => {
-    socket.on('receive_message', (data) => {
-      setMessages((prev) => [...prev, data]);
+    socket.on('receive_message', (msg) => {
+      setMessages((prev) => [...prev, msg]);
+
+      // ✅ Play notification sound for messages from others
+      if (!msg.self) {
+        const notificationSound = new Audio('/message.mp3');
+        notificationSound.play().catch(err => console.warn("Audio play error:", err));
+      }
+
+      // Browser notification for messages from others
+      if (!msg.self && Notification.permission === 'granted') {
+        new Notification('New message!', { body: `${msg.username}: ${msg.text}` });
+      }
     });
 
-    // Listen for incoming files
-    socket.on('receive_file', (data) => {
-      setMessages((prev) => [...prev, data]);
+    socket.on('receive_file', (msg) => {
+      setMessages((prev) => [...prev, msg]);
+
+      // ✅ Play notification sound for files from others
+      if (!msg.self) {
+        const notificationSound = new Audio('/message.mp3');
+        notificationSound.play().catch(err => console.warn("Audio play error:", err));
+      }
+
+      // Browser notification for files from others
+      if (!msg.self && Notification.permission === 'granted') {
+        new Notification('New file received!', { body: `${msg.username} sent: ${msg.fileName}` });
+      }
     });
 
     return () => {
@@ -49,7 +77,7 @@ const Chat = ({ username, socket }) => {
     };
   }, [socket]);
 
-  // Listen for online users updates
+  // Listen for online users
   useEffect(() => {
     socket.on('user_status', ({ users }) => {
       setOnlineUsers(users);
@@ -57,7 +85,24 @@ const Chat = ({ username, socket }) => {
     return () => socket.off('user_status');
   }, [socket]);
 
-  // Handle sending a message
+  useEffect(() => {
+  socket.on('connect_error', (err) => {
+    console.error('Connection error:', err);
+    alert('Connection lost. Please check your network.');
+  });
+
+  socket.on('reconnect', () => {
+    console.log('Reconnected to server');
+    socket.emit('user_join', { username });
+  });
+
+  return () => {
+    socket.off('connect_error');
+    socket.off('reconnect');
+  };
+}, [socket, username]);
+
+  // Handle sending a text message
   const sendMessage = (e) => {
     e.preventDefault();
     if (input.trim()) {
@@ -72,7 +117,7 @@ const Chat = ({ username, socket }) => {
     }
   };
 
-  // Handle typing events
+  // Handle typing
   const handleTyping = () => {
     socket.emit('typing', { username });
     clearTimeout(typingTimeoutRef.current);
@@ -81,7 +126,7 @@ const Chat = ({ username, socket }) => {
     }, 1000);
   };
 
-  // Handle file upload
+  // Handle file uploads
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -92,7 +137,7 @@ const Chat = ({ username, socket }) => {
         username,
         fileName: file.name,
         fileType: file.type,
-        fileContent: reader.result, // base64 string
+        fileContent: reader.result,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       socket.emit('send_file', fileData);
@@ -113,7 +158,7 @@ const Chat = ({ username, socket }) => {
         </ul>
       </div>
 
-      {/* Chat Messages */}
+      {/* Messages */}
       <div className="messages">
         {messages.map((msg, i) => (
           <div key={i} className={msg.self ? 'self' : 'other'}>
@@ -132,7 +177,7 @@ const Chat = ({ username, socket }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input & File Upload */}
+      {/* Input & File Upload */}
       <form onSubmit={sendMessage}>
         <input
           value={input}
