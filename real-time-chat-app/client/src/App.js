@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
 import Login from './components/Login';
 import Chat from './components/Chat';
+import './index.css'
 
 const socket = io('http://localhost:5000', {
   reconnection: true,
@@ -21,7 +22,7 @@ function App() {
       console.log('Connected to server:', socket.id);
       setConnected(true);
     };
-    
+
      const handleDisconnect = () => {
     setConnected(false);
   };
