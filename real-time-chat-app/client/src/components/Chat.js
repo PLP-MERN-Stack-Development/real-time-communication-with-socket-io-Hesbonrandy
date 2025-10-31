@@ -6,10 +6,12 @@ const Chat = ({ username, socket, onLogout }) => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
   const [activeChat, setActiveChat] = useState('global'); // 'global' or username
   const [privateMessages, setPrivateMessages] = useState({}); // { username: [msgs] }
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   // Request notification permission
   useEffect(() => {
@@ -21,45 +23,45 @@ const Chat = ({ username, socket, onLogout }) => {
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, privateMessages, activeChat]);
 
   // Listen for messages
-useEffect(() => {
-  const handleMessage = (msg, isPrivate = false) => {
-    const target = isPrivate ? msg.from : 'global';
-    const isSelf = msg.from === username;
-    
-    if (isPrivate) {
-      setPrivateMessages(prev => ({
-        ...prev,
-        [msg.from]: [...(prev[msg.from] || []), { ...msg, self: isSelf }]
-      }));
-    } else {
-      setMessages(prev => [...prev, { ...msg, self: isSelf }]);
-    }
+  useEffect(() => {
+    const handleMessage = (msg, isPrivate = false) => {
+      const target = isPrivate ? msg.from : 'global';
+      const isSelf = msg.from === username;
 
-    // Notifications
-    if (!isSelf) {
-      new Audio('/message.mp3').play().catch(() => {});
-      if (Notification.permission === 'granted') {
-        new Notification('New message!', { 
-          body: `${msg.from}: ${msg.text || '📎 File'}`,
-          tag: isPrivate ? `private-${msg.from}` : 'global'
-        });
+      if (isPrivate) {
+        setPrivateMessages((prev) => ({
+          ...prev,
+          [msg.from]: [...(prev[msg.from] || []), { ...msg, self: isSelf }],
+        }));
+      } else {
+        setMessages((prev) => [...prev, { ...msg, self: isSelf }]);
       }
-    }
-  };
 
-  socket.on('receive_message', (msg) => handleMessage(msg, false));
-  socket.on('receive_file', (msg) => handleMessage(msg, false));
-  socket.on('private_message', (msg) => handleMessage(msg, true));
+      // Notifications
+      if (!isSelf) {
+        new Audio('/message.mp3').play().catch(() => {});
+        if (Notification.permission === 'granted') {
+          new Notification('New message!', {
+            body: `${msg.from}: ${msg.text || '📎 File'}`,
+            tag: isPrivate ? `private-${msg.from}` : 'global',
+          });
+        }
+      }
+    };
 
-  return () => {
-    socket.off('receive_message');
-    socket.off('receive_file');
-    socket.off('private_message');
-  };
-}, [socket, username]);
+    socket.on('receive_message', (msg) => handleMessage(msg, false));
+    socket.on('receive_file', (msg) => handleMessage(msg, false));
+    socket.on('private_message', (msg) => handleMessage(msg, true));
+
+    return () => {
+      socket.off('receive_message');
+      socket.off('receive_file');
+      socket.off('private_message');
+    };
+  }, [socket, username]);
 
   // Typing indicators
   useEffect(() => {
@@ -96,30 +98,65 @@ useEffect(() => {
     return () => socket.off('reconnect');
   }, [socket, username]);
 
-  // Send message
+  // Send message with delivery acknowledgment
   const sendMessage = (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    const messageData = {
-      username,
+    const payload = {
       text: input,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
     };
 
-    socket.emit('send_message', messageData, (ack) => {
-      if (ack?.received) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.time === messageData.time && msg.username === username
-              ? { ...msg, status: 'delivered' }
-              : msg
-          )
-        );
-      }
-    });
+    if (activeChat === 'global') {
+      socket.emit('send_message', { ...payload, username }, (ack) => {
+        if (ack?.received) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.time === payload.time && msg.username === username
+                ? { ...msg, status: 'delivered' }
+                : msg
+            )
+          );
+        }
+      });
 
-    setMessages((prev) => [...prev, { ...messageData, self: true, status: 'sent' }]);
+      setMessages((prev) => [
+        ...prev,
+        { ...payload, username, self: true, status: 'sent' },
+      ]);
+    } else {
+      socket.emit('private_message', { to: activeChat, text: input }, (ack) => {
+        if (ack?.received) {
+          setPrivateMessages((prev) => ({
+            ...prev,
+            [activeChat]: prev[activeChat].map((msg) =>
+              msg.time === payload.time && msg.username === username
+                ? { ...msg, status: 'delivered' }
+                : msg
+            ),
+          }));
+        }
+      });
+
+      setPrivateMessages((prev) => ({
+        ...prev,
+        [activeChat]: [
+          ...(prev[activeChat] || []),
+          {
+            ...payload,
+            username,
+            self: true,
+            to: activeChat,
+            status: 'sent',
+          },
+        ],
+      }));
+    }
+
     setInput('');
   };
 
@@ -144,7 +181,10 @@ useEffect(() => {
         fileName: file.name,
         fileType: file.type,
         fileContent: reader.result,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
       };
 
       socket.emit('send_file', fileData, (ack) => {
@@ -159,29 +199,57 @@ useEffect(() => {
         }
       });
 
-      setMessages((prev) => [...prev, { ...fileData, self: true, status: 'sent' }]);
+      setMessages((prev) => [
+        ...prev,
+        { ...fileData, self: true, status: 'sent' },
+      ]);
     };
     reader.readAsDataURL(file);
   };
 
+  // Get current chat messages
+  const currentMessages =
+    activeChat === 'global'
+      ? messages
+      : privateMessages[activeChat] || [];
+
+  const filteredMessages = searchTerm
+    ? currentMessages.filter(
+        (msg) =>
+          msg.text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          msg.fileName?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : currentMessages;
+
   // Logout handler
   const handleLogout = () => {
     socket.disconnect();
-    onLogout(); // Go back to login screen
+    onLogout();
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        fontFamily: 'Arial, sans-serif',
+      }}
+    >
       {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        padding: '12px 16px',
-        backgroundColor: '#f8f9fa',
-        borderBottom: '1px solid #dee2e6'
-      }}>
-        <h2 style={{ margin: 0, color: '#495057' }}>Welcome, <strong>{username}</strong>!</h2>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 16px',
+          backgroundColor: '#f8f9fa',
+          borderBottom: '1px solid #dee2e6',
+        }}
+      >
+        <h2 style={{ margin: 0, color: '#495057' }}>
+          Welcome, <strong>{username}</strong>!
+        </h2>
         <button
           onClick={handleLogout}
           style={{
@@ -190,7 +258,7 @@ useEffect(() => {
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           Logout
@@ -198,20 +266,29 @@ useEffect(() => {
       </div>
 
       {/* Online Users */}
-      <div style={{ padding: '10px', fontSize: '0.9em', backgroundColor: '#e9ecef' }}>
-        <strong>Online ({onlineUsers.length}):</strong> {onlineUsers.join(', ') || '—'}
+      <div
+        style={{
+          padding: '10px',
+          fontSize: '0.9em',
+          backgroundColor: '#e9ecef',
+        }}
+      >
+        <strong>Online ({onlineUsers.length}):</strong>{' '}
+        {onlineUsers.join(', ') || '—'}
       </div>
 
       {/* Messages */}
-      <div style={{ 
-        flex: 1, 
-        padding: '10px', 
-        overflowY: 'auto', 
-        backgroundColor: '#f1f3f5',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        {messages.map((msg, i) => (
+      <div
+        style={{
+          flex: 1,
+          padding: '10px',
+          overflowY: 'auto',
+          backgroundColor: '#f1f3f5',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {filteredMessages.map((msg, i) => (
           <div
             key={i}
             style={{
@@ -221,11 +298,17 @@ useEffect(() => {
               margin: '4px 0',
               borderRadius: '10px',
               maxWidth: '70%',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
             }}
           >
             {!msg.self && (
-              <div style={{ fontWeight: 'bold', fontSize: '0.85em', color: '#495057' }}>
+              <div
+                style={{
+                  fontWeight: 'bold',
+                  fontSize: '0.85em',
+                  color: '#495057',
+                }}
+              >
                 {msg.username}
               </div>
             )}
@@ -240,18 +323,26 @@ useEffect(() => {
                 📎 {msg.fileName}
               </a>
             )}
-            <div style={{ fontSize: '0.7em', color: '#6c757d', marginTop: '4px' }}>
+            <div
+              style={{
+                fontSize: '0.7em',
+                color: '#6c757d',
+                marginTop: '4px',
+              }}
+            >
               {msg.time} {msg.self && (msg.status === 'delivered' ? '✅' : '⏳')}
             </div>
           </div>
         ))}
         {isTyping && (
-          <div style={{ 
-            alignSelf: 'flex-start', 
-            fontStyle: 'italic', 
-            color: '#6c757d', 
-            marginTop: '4px' 
-          }}>
+          <div
+            style={{
+              alignSelf: 'flex-start',
+              fontStyle: 'italic',
+              color: '#6c757d',
+              marginTop: '4px',
+            }}
+          >
             Someone is typing...
           </div>
         )}
@@ -265,7 +356,7 @@ useEffect(() => {
           display: 'flex',
           padding: '10px',
           borderTop: '1px solid #dee2e6',
-          backgroundColor: 'white'
+          backgroundColor: 'white',
         }}
       >
         <input
@@ -281,7 +372,7 @@ useEffect(() => {
             padding: '8px',
             border: '1px solid #ced4da',
             borderRadius: '4px',
-            marginRight: '8px'
+            marginRight: '8px',
           }}
         />
         <input
@@ -299,7 +390,7 @@ useEffect(() => {
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           Send
