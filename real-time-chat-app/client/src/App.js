@@ -4,7 +4,11 @@ import io from 'socket.io-client';
 import Login from './components/Login';
 import Chat from './components/Chat';
 
-const socket = io('http://localhost:5000');
+const socket = io('http://localhost:5000', {
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
 
 function App() {
   const [connected, setConnected] = useState(false);
