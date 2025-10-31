@@ -4,7 +4,7 @@ import io from 'socket.io-client';
 import Login from './components/Login';
 import Chat from './components/Chat';
 
-const socket = io('http://127.0.0.1:5000', {
+const socket = io('http://localhost:5000', {
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000
@@ -16,20 +16,24 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Monitor socket connection status
-  useEffect(() => {
-    socket.on('connect', () => {
+   useEffect(() => {
+    const handleConnect = () => {
       console.log('Connected to server:', socket.id);
       setConnected(true);
-    });
+    };
+    
+     const handleDisconnect = () => {
+    setConnected(false);
+  };
 
-    socket.on('disconnect', () => {
-      setConnected(false);
-    });
+  socket.on('connect', handleConnect);
+  socket.on('disconnect', handleDisconnect);
 
     return () => {
-      socket.disconnect();
-    };
-  }, []);
+    socket.off('connect', handleConnect);
+    socket.off('disconnect', handleDisconnect);
+  };
+}, []);
 
   // When username is set (after login), notify the server
   useEffect(() => {
