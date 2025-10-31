@@ -80,27 +80,24 @@ io.on('connection', (socket) => {
   });
 
   // Private messages
-  socket.on('private_message', ({ to, text }), callback => {
-    const recipientSocketId = Object.keys(users).find((id) => users[id] === to);
-    
-    if (recipientSocketId) {
-      const msg = {
-        from: socket.username,
-        text,
-        time: new Date().toISOString(),
-      };
+  socket.on('private_message', ({ to, text }, callback) => {
+  const recipientSocketId = Object.keys(users).find((id) => users[id] === to);
 
-      // Send to recipient
-      socket.to(recipientSocketId).emit('private_message', msg);
+  if (recipientSocketId) {
+    const msg = {
+      from: socket.username,
+      text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
 
-      // Echo back to sender
-      socket.emit('private_message', { ...msg, self: true, to });
+    socket.to(recipientSocketId).emit('private_message', msg);
+    socket.emit('private_message', { ...msg, self: true, to });
 
-      if (callback) callback({ received: true });
-     } else {
-      if (callback) callback({ received: false });
-    }
-  });
+    if (callback) callback({ received: true }); // ✅ Acknowledge
+  } else {
+    if (callback) callback({ received: false, error: 'User not online' });
+  }
+});
 
   // Typing indicators
   socket.on('typing', ({ username }) => {
