@@ -26,6 +26,10 @@ app.get('/', (req, res) => {
   res.send('Chat Server is running!');
 });
 
+io.engine.on('initial_headers', (headers, req) => {
+  console.log('🔌 WebSocket handshake from:', req.headers.origin);
+});
+
 // Socket.IO connection
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
