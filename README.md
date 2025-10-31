@@ -1,77 +1,141 @@
-# Real-Time Chat Application with Socket.io
+# Real-Time Chat Application
 
-This assignment focuses on building a real-time chat application using Socket.io, implementing bidirectional communication between clients and server.
+A feature-rich real-time chat application built with Socket.io, React, and Express that enables seamless communication between users.
 
-## Assignment Overview
+## Features
 
-You will build a chat application with the following features:
-1. Real-time messaging using Socket.io
-2. User authentication and presence
-3. Multiple chat rooms or private messaging
-4. Real-time notifications
-5. Advanced features like typing indicators and read receipts
+### Core Functionality
+- 🔐 Simple username-based authentication
+- 💬 Real-time global chat messaging
+- 👥 Online user status tracking
+- 🕒 Message timestamps and delivery confirmation
+- 📍 Typing indicators
+- 🌓 Dark/Light theme support
+
+### Advanced Features
+- 📱 Responsive design for mobile and desktop
+- 📨 Private messaging between users
+- 📎 File sharing support (images, PDFs, docs)
+- 🔔 Desktop notifications for new messages
+- 🔄 Automatic reconnection handling
+- 🔍 Message search functionality
+- ✅ Message delivery acknowledgments
+- 🔊 Sound notifications for new messages
+
+## Technology Stack
+
+- **Frontend**: React.js
+- **Backend**: Node.js, Express
+- **Real-time Communication**: Socket.io
+- **Styling**: CSS-in-JS
+
+## Setup Instructions
+
+### Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn
+- Modern web browser
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd real-time-chat-app
+```
+
+2. Install server dependencies:
+```bash
+cd server
+npm install
+```
+
+3. Install client dependencies:
+```bash
+cd ../client
+npm install
+```
+
+### Running the Application
+
+1. Start the server:
+```bash
+cd server
+npm run dev
+```
+
+2. Start the client in a new terminal:
+```bash
+cd client
+npm start
+```
+
+3. Access the application at http://localhost:3000
+
+## Usage
+
+1. Enter your username to join the chat
+2. Send messages in the global chat
+3. Click on an online user to start a private conversation
+4. Use the file upload button to share files
+5. Toggle dark/light theme using the theme switch
+6. Search messages using the search input
+7. Desktop notifications will appear for new messages when the window is not focused
+
+## Screenshots
+
+[Add your application screenshots here]
 
 ## Project Structure
 
 ```
-socketio-chat/
-├── client/                 # React front-end
-│   ├── public/             # Static files
-│   ├── src/                # React source code
-│   │   ├── components/     # UI components
-│   │   ├── context/        # React context providers
-│   │   ├── hooks/          # Custom React hooks
-│   │   ├── pages/          # Page components
-│   │   ├── socket/         # Socket.io client setup
-│   │   └── App.jsx         # Main application component
-│   └── package.json        # Client dependencies
-├── server/                 # Node.js back-end
-│   ├── config/             # Configuration files
-│   ├── controllers/        # Socket event handlers
-│   ├── models/             # Data models
-│   ├── socket/             # Socket.io server setup
-│   ├── utils/              # Utility functions
-│   ├── server.js           # Main server file
-│   └── package.json        # Server dependencies
-└── README.md               # Project documentation
+real-time-chat-app/
+├── client/                 # React frontend
+│   ├── public/            
+│   └── src/               
+│       ├── components/    
+│       │   ├── Chat.js    
+│       │   └── Login.js   
+│       ├── App.js         
+│       └── ThemeContext.js
+└── server/                # Node.js backend
+    ├── package.json      
+    └── server.js         
 ```
 
-## Getting Started
+## API Documentation
 
-1. Accept the GitHub Classroom assignment invitation
-2. Clone your personal repository that was created by GitHub Classroom
-3. Follow the setup instructions in the `Week5-Assignment.md` file
-4. Complete the tasks outlined in the assignment
+### Socket Events
 
-## Files Included
+#### Client to Server:
+- `user_join`: Join the chat with username
+- `send_message`: Send a message
+- `send_file`: Share a file
+- `private_message`: Send private message
+- `typing`: Indicate user is typing
+- `stop_typing`: Indicate user stopped typing
 
-- `Week5-Assignment.md`: Detailed assignment instructions
-- Starter code for both client and server:
-  - Basic project structure
-  - Socket.io configuration templates
-  - Sample components for the chat interface
+#### Server to Client:
+- `receive_message`: Broadcast received message
+- `receive_file`: Broadcast shared file
+- `private_message`: Deliver private message
+- `user_status`: Update online users list
+- `user_typing`: Show typing indicator
 
-## Requirements
+## Contributing
 
-- Node.js (v18 or higher)
-- npm or yarn
-- Modern web browser
-- Basic understanding of React and Express
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Submission
+## License
 
-Your work will be automatically submitted when you push to your GitHub Classroom repository. Make sure to:
+This project is licensed under the ISC License
 
-1. Complete both the client and server portions of the application
-2. Implement the core chat functionality
-3. Add at least 3 advanced features
-4. Document your setup process and features in the README.md
-5. Include screenshots or GIFs of your working application
-6. Optional: Deploy your application and add the URLs to your README.md
+## Acknowledgments
 
-## Resources
-
-- [Socket.io Documentation](https://socket.io/docs/v4/)
-- [React Documentation](https://react.dev/)
-- [Express.js Documentation](https://expressjs.com/)
-- [Building a Chat Application with Socket.io](https://socket.io/get-started/chat) 
+- Socket.io team for the excellent real-time engine
+- React team for the frontend framework
+- Express.js team for the backend framework
