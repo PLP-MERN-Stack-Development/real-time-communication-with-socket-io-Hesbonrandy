@@ -8,6 +8,8 @@ const Chat = ({ username, socket, onLogout }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const [activeChat, setActiveChat] = useState('global'); // 'global' or username
+  const [privateMessages, setPrivateMessages] = useState({}); // { username: [msgs] }
 
   // Request notification permission
   useEffect(() => {
@@ -22,25 +24,42 @@ const Chat = ({ username, socket, onLogout }) => {
   }, [messages]);
 
   // Listen for messages
-  useEffect(() => {
-    const handleMessage = (msg) => {
-      setMessages((prev) => [...prev, { ...msg, self: msg.username === username }]);
-      if (msg.username !== username) {
-        new Audio('/message.mp3').play().catch(() => {});
-        if (Notification.permission === 'granted') {
-          new Notification('New message!', { body: `${msg.username}: ${msg.text || '📎 File'}` });
-        }
+useEffect(() => {
+  const handleMessage = (msg, isPrivate = false) => {
+    const target = isPrivate ? msg.from : 'global';
+    const isSelf = msg.from === username;
+    
+    if (isPrivate) {
+      setPrivateMessages(prev => ({
+        ...prev,
+        [msg.from]: [...(prev[msg.from] || []), { ...msg, self: isSelf }]
+      }));
+    } else {
+      setMessages(prev => [...prev, { ...msg, self: isSelf }]);
+    }
+
+    // Notifications
+    if (!isSelf) {
+      new Audio('/message.mp3').play().catch(() => {});
+      if (Notification.permission === 'granted') {
+        new Notification('New message!', { 
+          body: `${msg.from}: ${msg.text || '📎 File'}`,
+          tag: isPrivate ? `private-${msg.from}` : 'global'
+        });
       }
-    };
+    }
+  };
 
-    socket.on('receive_message', handleMessage);
-    socket.on('receive_file', handleMessage);
+  socket.on('receive_message', (msg) => handleMessage(msg, false));
+  socket.on('receive_file', (msg) => handleMessage(msg, false));
+  socket.on('private_message', (msg) => handleMessage(msg, true));
 
-    return () => {
-      socket.off('receive_message', handleMessage);
-      socket.off('receive_file', handleMessage);
-    };
-  }, [socket, username]);
+  return () => {
+    socket.off('receive_message');
+    socket.off('receive_file');
+    socket.off('private_message');
+  };
+}, [socket, username]);
 
   // Typing indicators
   useEffect(() => {

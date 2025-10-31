@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
 import Login from './components/Login';
 import Chat from './components/Chat';
+import { useTheme } from './ThemeContext';
 
 // Create a single socket instance
 const socket = io('http://localhost:5000', {
@@ -15,6 +16,7 @@ function App() {
   const [connected, setConnected] = useState(false);
   const [username, setUsername] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { darkMode, toggleDarkMode } = useTheme();
 
   // Handle socket connection status
   useEffect(() => {
@@ -31,7 +33,6 @@ function App() {
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
 
-    // Cleanup: remove listeners only (do NOT disconnect socket here)
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
@@ -46,21 +47,48 @@ function App() {
     }
   }, [username]);
 
-  // Handle login from Login component
   const handleLogin = (name) => {
     setUsername(name);
   };
 
-  // Handle logout from Chat component
   const handleLogout = () => {
-    // Clean up state — socket.disconnect() is called inside Chat
     setIsLoggedIn(false);
     setUsername('');
   };
 
   return (
-    <div className="App" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center', color: '#333' }}>Real-Time Chat App</h1>
+    <div
+      className="App"
+      style={{
+        padding: '20px',
+        maxWidth: '1200px',
+        margin: '0 auto',
+        backgroundColor: darkMode ? '#121212' : '#f5f5f5',
+        color: darkMode ? '#fff' : '#000',
+        minHeight: '100vh',
+        transition: 'all 0.3s ease',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>💬 Real-Time Chat App</h1>
+
+        {/* Dark Mode Toggle Button */}
+        <button
+          onClick={toggleDarkMode}
+          style={{
+            marginLeft: '10px',
+            padding: '6px 12px',
+            backgroundColor: darkMode ? '#ffc107' : '#212529',
+            color: darkMode ? '#212529' : '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+          }}
+        >
+          {darkMode ? '☀️ Light' : '🌙 Dark'}
+        </button>
+      </div>
+
       <p style={{ textAlign: 'center', fontSize: '1.1em' }}>
         Status: {connected ? '🟢 Connected' : '🔴 Disconnected'}
       </p>
@@ -70,11 +98,7 @@ function App() {
           <Login onLogin={handleLogin} />
         </div>
       ) : (
-        <Chat 
-          username={username} 
-          socket={socket} 
-          onLogout={handleLogout} 
-        />
+        <Chat username={username} socket={socket} onLogout={handleLogout} />
       )}
     </div>
   );
