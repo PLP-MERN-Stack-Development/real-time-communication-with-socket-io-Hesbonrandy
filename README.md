@@ -84,7 +84,20 @@ npm start
 
 ## Screenshots
 
-[Add your application screenshots here]
+### 1. Logged-In Dashboard (Light Mode)
+![Logged-In Dashboard](./screenshots/logged-in-dashboard.png)
+
+> Shows successful connection, welcome message, and online user count.
+
+### 2. Light Theme Interface
+![Light Theme](./screenshots/light-theme.png)
+
+> Clean, modern UI with green connected status indicator.
+
+### 3. Dark Theme Interface
+![Dark Theme](./screenshots/dark-theme.png)
+
+> Toggleable dark mode with high contrast for night-time use.
 
 ## Project Structure
 
