@@ -172,6 +172,11 @@ const Chat = ({ username, socket }) => {
     reader.readAsDataURL(file);
   };
 
+const handleLogout = () => {
+  socket.disconnect();
+  window.location.reload(); // or use React state to go back to login
+};
+
   return (
     <div className="chat-container">
       {/* Online Users */}
