@@ -1,6 +1,7 @@
+// client/src/components/Chat.js
 import React, { useState, useEffect, useRef } from 'react';
 
-const Chat = ({ username, socket }) => {
+const Chat = ({ username, socket, onLogout }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -8,74 +9,59 @@ const Chat = ({ username, socket }) => {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Request notification permission on mount
+  // Request notification permission
   useEffect(() => {
     if (Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
   }, []);
 
-  // Scroll to bottom when messages change
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-  useEffect(scrollToBottom, [messages]);
-
-  // Listen for incoming messages
+  // Auto-scroll to bottom
   useEffect(() => {
-    socket.on('receive_message', (msg) => {
-      setMessages((prev) => [...prev, msg]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-      // Play notification sound for messages from others
-      if (!msg.self) {
-        const notificationSound = new Audio('/message.mp3');
-        notificationSound.play().catch(err => console.warn("Audio play error:", err));
+  // Listen for messages
+  useEffect(() => {
+    const handleMessage = (msg) => {
+      setMessages((prev) => [...prev, { ...msg, self: msg.username === username }]);
+      if (msg.username !== username) {
+        new Audio('/message.mp3').play().catch(() => {});
+        if (Notification.permission === 'granted') {
+          new Notification('New message!', { body: `${msg.username}: ${msg.text || '📎 File'}` });
+        }
       }
+    };
 
-      // Browser notification
-      if (!msg.self && Notification.permission === 'granted') {
-        new Notification('New message!', { body: `${msg.username}: ${msg.text}` });
-      }
-    });
-
-    socket.on('receive_file', (msg) => {
-      setMessages((prev) => [...prev, msg]);
-
-      if (!msg.self) {
-        const notificationSound = new Audio('/message.mp3');
-        notificationSound.play().catch(err => console.warn("Audio play error:", err));
-      }
-
-      if (!msg.self && Notification.permission === 'granted') {
-        new Notification('New file received!', { body: `${msg.username} sent: ${msg.fileName}` });
-      }
-    });
+    socket.on('receive_message', handleMessage);
+    socket.on('receive_file', handleMessage);
 
     return () => {
-      socket.off('receive_message');
-      socket.off('receive_file');
+      socket.off('receive_message', handleMessage);
+      socket.off('receive_file', handleMessage);
     };
-  }, [socket]);
+  }, [socket, username]);
 
-  // Listen for typing events
+  // Typing indicators
   useEffect(() => {
-    socket.on('user_typing', () => {
+    const handleTyping = () => {
       setIsTyping(true);
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1500);
-    });
+    };
 
-    socket.on('user_stop_typing', () => {
-      setIsTyping(false);
-    });
+    const handleStopTyping = () => setIsTyping(false);
+
+    socket.on('user_typing', handleTyping);
+    socket.on('user_stop_typing', handleStopTyping);
 
     return () => {
-      socket.off('user_typing');
-      socket.off('user_stop_typing');
+      socket.off('user_typing', handleTyping);
+      socket.off('user_stop_typing', handleStopTyping);
     };
   }, [socket]);
 
-  // Listen for online users
+  // Online users
   useEffect(() => {
     socket.on('user_status', ({ users }) => {
       setOnlineUsers(users);
@@ -83,54 +69,42 @@ const Chat = ({ username, socket }) => {
     return () => socket.off('user_status');
   }, [socket]);
 
-  // Handle connection and reconnection
+  // Reconnection
   useEffect(() => {
-    socket.on('connect_error', (err) => {
-      console.error('Connection error:', err);
-      alert('Connection lost. Please check your network.');
-    });
-
     socket.on('reconnect', () => {
-      console.log('Reconnected to server');
       socket.emit('user_join', { username });
     });
-
-    return () => {
-      socket.off('connect_error');
-      socket.off('reconnect');
-    };
+    return () => socket.off('reconnect');
   }, [socket, username]);
 
-  // Handle sending a text message with acknowledgment
+  // Send message
   const sendMessage = (e) => {
     e.preventDefault();
-    if (input.trim()) {
-      const messageData = {
-        username,
-        text: input,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
+    if (!input.trim()) return;
 
-      // Emit with acknowledgment callback
-      socket.emit('send_message', messageData, (ack) => {
-        if (ack?.received) {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.time === messageData.time && msg.username === username
-                ? { ...msg, status: 'delivered' }
-                : msg
-            )
-          );
-        }
-      });
+    const messageData = {
+      username,
+      text: input,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
 
-      // Add locally with pending status
-      setMessages((prev) => [...prev, { ...messageData, self: true, status: 'sent' }]);
-      setInput('');
-    }
+    socket.emit('send_message', messageData, (ack) => {
+      if (ack?.received) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.time === messageData.time && msg.username === username
+              ? { ...msg, status: 'delivered' }
+              : msg
+          )
+        );
+      }
+    });
+
+    setMessages((prev) => [...prev, { ...messageData, self: true, status: 'sent' }]);
+    setInput('');
   };
 
-  // Handle typing
+  // Typing detection
   const handleTyping = () => {
     socket.emit('typing', { username });
     clearTimeout(typingTimeoutRef.current);
@@ -139,9 +113,9 @@ const Chat = ({ username, socket }) => {
     }, 1000);
   };
 
-  // Handle file uploads with acknowledgment
+  // File upload
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
@@ -154,7 +128,6 @@ const Chat = ({ username, socket }) => {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
-      // Emit with acknowledgment callback
       socket.emit('send_file', fileData, (ack) => {
         if (ack?.received) {
           setMessages((prev) =>
@@ -172,56 +145,146 @@ const Chat = ({ username, socket }) => {
     reader.readAsDataURL(file);
   };
 
-const handleLogout = () => {
-  socket.disconnect();
-  window.location.reload(); // or use React state to go back to login
-};
+  // Logout handler
+  const handleLogout = () => {
+    socket.disconnect();
+    onLogout(); // Go back to login screen
+  };
 
   return (
-    <div className="chat-container">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
+      {/* Header */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        padding: '12px 16px',
+        backgroundColor: '#f8f9fa',
+        borderBottom: '1px solid #dee2e6'
+      }}>
+        <h2 style={{ margin: 0, color: '#495057' }}>Welcome, <strong>{username}</strong>!</h2>
+        <button
+          onClick={handleLogout}
+          style={{
+            padding: '6px 12px',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Logout
+        </button>
+      </div>
+
       {/* Online Users */}
-      <div className="online-users">
-        <h3>Online ({onlineUsers.length})</h3>
-        <ul>
-          {onlineUsers.map((user, index) => (
-            <li key={index}>{user}</li>
-          ))}
-        </ul>
+      <div style={{ padding: '10px', fontSize: '0.9em', backgroundColor: '#e9ecef' }}>
+        <strong>Online ({onlineUsers.length}):</strong> {onlineUsers.join(', ') || '—'}
       </div>
 
       {/* Messages */}
-      <div className="messages">
+      <div style={{ 
+        flex: 1, 
+        padding: '10px', 
+        overflowY: 'auto', 
+        backgroundColor: '#f1f3f5',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
         {messages.map((msg, i) => (
-          <div key={i} className={msg.self ? 'self' : 'other'}>
-            <strong>{msg.username}:</strong>{' '}
+          <div
+            key={i}
+            style={{
+              alignSelf: msg.self ? 'flex-end' : 'flex-start',
+              backgroundColor: msg.self ? '#d1e7dd' : '#fff',
+              padding: '8px 12px',
+              margin: '4px 0',
+              borderRadius: '10px',
+              maxWidth: '70%',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+            }}
+          >
+            {!msg.self && (
+              <div style={{ fontWeight: 'bold', fontSize: '0.85em', color: '#495057' }}>
+                {msg.username}
+              </div>
+            )}
             {msg.text ? (
-              msg.text
+              <div>{msg.text}</div>
             ) : (
-              <a href={msg.fileContent} download={msg.fileName}>
+              <a
+                href={msg.fileContent}
+                download={msg.fileName}
+                style={{ color: '#0d6efd', textDecoration: 'none' }}
+              >
                 📎 {msg.fileName}
               </a>
-            )}{' '}
-            <small>
+            )}
+            <div style={{ fontSize: '0.7em', color: '#6c757d', marginTop: '4px' }}>
               {msg.time} {msg.self && (msg.status === 'delivered' ? '✅' : '⏳')}
-            </small>
+            </div>
           </div>
         ))}
-        {isTyping && <div className="typing-indicator">Someone is typing...</div>}
+        {isTyping && (
+          <div style={{ 
+            alignSelf: 'flex-start', 
+            fontStyle: 'italic', 
+            color: '#6c757d', 
+            marginTop: '4px' 
+          }}>
+            Someone is typing...
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input & File Upload */}
-      <form onSubmit={sendMessage}>
+      {/* Input */}
+      <form
+        onSubmit={sendMessage}
+        style={{
+          display: 'flex',
+          padding: '10px',
+          borderTop: '1px solid #dee2e6',
+          backgroundColor: 'white'
+        }}
+      >
         <input
+          type="text"
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
             handleTyping();
           }}
           placeholder="Type a message..."
+          style={{
+            flex: 1,
+            padding: '8px',
+            border: '1px solid #ced4da',
+            borderRadius: '4px',
+            marginRight: '8px'
+          }}
         />
-        <input type="file" onChange={handleFileUpload} />
-        <button type="submit">Send</button>
+        <input
+          type="file"
+          onChange={handleFileUpload}
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          style={{ marginRight: '8px' }}
+        />
+        <button
+          type="submit"
+          disabled={!input.trim()}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#0d6efd',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Send
+        </button>
       </form>
     </div>
   );

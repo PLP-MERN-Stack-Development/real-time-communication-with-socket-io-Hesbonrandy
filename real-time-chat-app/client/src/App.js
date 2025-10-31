@@ -3,12 +3,12 @@ import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
 import Login from './components/Login';
 import Chat from './components/Chat';
-import './index.css'
 
+// Create a single socket instance
 const socket = io('http://localhost:5000', {
   reconnection: true,
   reconnectionAttempts: 5,
-  reconnectionDelay: 1000
+  reconnectionDelay: 1000,
 });
 
 function App() {
@@ -16,27 +16,29 @@ function App() {
   const [username, setUsername] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Monitor socket connection status
-   useEffect(() => {
+  // Handle socket connection status
+  useEffect(() => {
     const handleConnect = () => {
-      console.log('Connected to server:', socket.id);
+      console.log('✅ Connected to server:', socket.id);
       setConnected(true);
     };
 
-     const handleDisconnect = () => {
-    setConnected(false);
-  };
+    const handleDisconnect = () => {
+      console.log('❌ Disconnected from server');
+      setConnected(false);
+    };
 
-  socket.on('connect', handleConnect);
-  socket.on('disconnect', handleDisconnect);
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
 
+    // Cleanup: remove listeners only (do NOT disconnect socket here)
     return () => {
-    socket.off('connect', handleConnect);
-    socket.off('disconnect', handleDisconnect);
-  };
-}, []);
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+    };
+  }, []);
 
-  // When username is set (after login), notify the server
+  // Emit 'user_join' when username is set
   useEffect(() => {
     if (username) {
       socket.emit('user_join', { username });
@@ -44,20 +46,35 @@ function App() {
     }
   }, [username]);
 
-  // Handle login (triggered by Login component)
+  // Handle login from Login component
   const handleLogin = (name) => {
     setUsername(name);
   };
 
+  // Handle logout from Chat component
+  const handleLogout = () => {
+    // Clean up state — socket.disconnect() is called inside Chat
+    setIsLoggedIn(false);
+    setUsername('');
+  };
+
   return (
-    <div className="App">
-      <h1>Real-Time Chat App</h1>
-      <p>Status: {connected ? '🟢 Connected' : '🔴 Disconnected'}</p>
+    <div className="App" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <h1 style={{ textAlign: 'center', color: '#333' }}>Real-Time Chat App</h1>
+      <p style={{ textAlign: 'center', fontSize: '1.1em' }}>
+        Status: {connected ? '🟢 Connected' : '🔴 Disconnected'}
+      </p>
 
       {!isLoggedIn ? (
-        <Login onLogin={handleLogin} />
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '40px' }}>
+          <Login onLogin={handleLogin} />
+        </div>
       ) : (
-        <Chat username={username} socket={socket} />
+        <Chat 
+          username={username} 
+          socket={socket} 
+          onLogout={handleLogout} 
+        />
       )}
     </div>
   );
