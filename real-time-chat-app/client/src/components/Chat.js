@@ -112,13 +112,13 @@ const Chat = ({ username, socket, onLogout }) => {
     };
 
     if (activeChat === 'global') {
-      socket.emit('send_message', { ...payload, username }, (ack) => {
-        if (ack?.received) {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.time === payload.time && msg.username === username
-                ? { ...msg, status: 'delivered' }
-                : msg
+        socket.emit('send_message', { ...payload, username }, (ack) => {
+    if (ack?.received) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.time === payload.time && msg.username === username
+            ? { ...msg, status: 'delivered' }
+            : msg
             )
           );
         }

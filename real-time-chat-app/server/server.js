@@ -80,9 +80,9 @@ io.on('connection', (socket) => {
   });
 
   // Private messages
-  socket.on('private_message', ({ to, text }) => {
+  socket.on('private_message', ({ to, text }), callback => {
     const recipientSocketId = Object.keys(users).find((id) => users[id] === to);
-
+    
     if (recipientSocketId) {
       const msg = {
         from: socket.username,
@@ -95,6 +95,10 @@ io.on('connection', (socket) => {
 
       // Echo back to sender
       socket.emit('private_message', { ...msg, self: true, to });
+
+      if (callback) callback({ received: true });
+     } else {
+      if (callback) callback({ received: false });
     }
   });
 
