@@ -6,13 +6,13 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
 
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: "http://localhost:3000", // React dev server
     methods: ["GET", "POST"],
+    credentials: true
   },
 });
 
